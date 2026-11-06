@@ -97,8 +97,6 @@ Since this is a self-hosted extension, you need to load it manually into your br
 
 ## 📂 Project Structure
 
-The extension is built with a modular, dual-context architecture:
-
 ```text
 kibana-bulk-note-extension-v1/
 │
