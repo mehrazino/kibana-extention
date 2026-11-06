@@ -130,11 +130,6 @@ kibana-bulk-note-extension-v1/
 └── screenshot1.png             # Extension preview image
 ```
 
-- **`page-script.js`**: The core engine. It runs in the page's context, patches `window.fetch`, and handles the heavy lifting of API interactions and target resolution.
-- **`content.js`**: Runs in an isolated environment. It acts as a secure bridge between the page script, the popup UI, and the browser's local storage.
-- **`background.js`**: Manages the extension's toolbar icon, turning it colored when active on Kibana and gray otherwise.
-- **`popup.html` & `popup.js`**: The user interface is built using **HTML5** for structure and **CSS3** for the modern dark-mode styling. The logic is handled by pure **JavaScript**.
-
 ## 🗺️ Roadmap
 
 - [ ] **Future Kibana Support:** Continuously update the extension to support newer Kibana versions and adapt to API changes.
