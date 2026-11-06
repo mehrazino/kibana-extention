@@ -31,7 +31,7 @@ When investigating security alerts in Kibana, analysts often need to tag, annota
 
 **Kibana Bulk Note** solves this by hooking into Kibana's internal APIs. Once you add a note to a single alert within a multi-selected view, the extension automatically replicates that exact note to every other selected alert. It also includes tools for cleaning up duplicate notes and exporting selected alerts as JSON.
 
-## 📸 Screenshots
+## 📸 Screenshot
 
 <p align="center">
   <img src="screenshot1.png" alt="Kibana Bulk Note – Extension popup with activity logs" width="360" />
