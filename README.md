@@ -43,7 +43,7 @@ When investigating security alerts in Kibana, analysts often need to tag, annota
 - **🗑️ Duplicate Note Cleanup:** Delete a specific note from one alert, and the extension will automatically find and delete identical notes across all other selected alerts.
 - **📋 Copy Alerts JSON:** Instantly fetch and copy the full JSON payload of all currently selected alerts to your clipboard.
 - **📊 Activity Logs:** A built-in, real-time logging panel in the popup to monitor exactly what the extension is doing (successes, failures, and API interactions).
-- **🌐 Cross-Browser Support:** Fully compatible with both Chromium-based browsers (Chrome, Edge, Brave) and Gecko-based browsers (Firefox).
+- **🌐 Cross-Browser Support:** Fully compatible with both Chromium-based browsers and Gecko-based browsers.
 
 ## ⚙️ How It Works
 
