@@ -117,12 +117,17 @@ kibana-bulk-note-extension-v1/
 ├── content.js                  # Isolated world script (UI bridge & storage)
 ├── page-script.js              # Main world script (fetch interception & API logic)
 │
-├── popup.html                  # Extension popup interface (HTML5 & CSS3)
+├── popup.html                  # Extension popup interface (HTML5)
+├── popup.css                   # Popup UI styles (CSS3)
 ├── popup.js                    # Popup logic & activity log rendering (JavaScript)
 │
 ├── manifest.json               # Extension configuration (Manifest V3)
-├── elastic-kibana-color.png    # Active icon
-└── elastic-kibana-gray.png     # Inactive icon
+├── elastic-kibana-color.png    # Active extension icon
+├── elastic-kibana-gray.png     # Inactive extension icon
+│
+├── README.md                   # Project documentation and guide
+├── LICENSE                     # Project license (GPL-3.0)
+└── screenshot1.png             # Extension preview image
 ```
 
 - **`page-script.js`**: The core engine. It runs in the page's context, patches `window.fetch`, and handles the heavy lifting of API interactions and target resolution.
