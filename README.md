@@ -61,13 +61,13 @@ The extension uses a dual-script architecture to ensure stability and security:
 
 Since this is a self-hosted extension, you need to load it manually into your browser.
 
-### For Chromium-based Browsers (Chrome, Edge, Brave)
+### For Chromium-based Browsers (Google Chrome, Microsoft Edge, Brave)
 1. Download or clone this repository to your local machine.
 2. Open your browser and navigate to `chrome://extensions/`.
 3. Enable **Developer mode** (toggle in the top right corner).
 4. Click **Load unpacked** and select the folder containing this project.
 
-### For Gecko-based Browsers (Firefox)
+### For Gecko-based Browsers (Mozilla Firefox, LibreWolf, Tor Browser)
 1. Download or clone this repository to your local machine.
 2. Open Firefox and navigate to `about:debugging#/runtime/this-firefox`.
 3. Click **Load Temporary Add-on...**.
