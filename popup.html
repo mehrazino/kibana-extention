@@ -612,6 +612,18 @@
             text-align: center;
         }
 
+        .footer-link {
+            color: var(--text-secondary);
+            text-decoration: none;
+            transition: color 0.2s ease;
+            cursor: pointer;
+        }
+
+        .footer-link:hover {
+            color: var(--text-primary);
+            text-decoration: none;
+        }
+
         @media (prefers-reduced-motion: reduce) {
             .logs-body,
             .supports-interpolate-size .logs-body {
@@ -704,7 +716,7 @@
         </div>
 
         <div class="footer">
-            <span>Kibana Helper Extension v1.0.2</span>
+            <a href="#" class="footer-link">Kibana Note Extension v1.0.3</a>
         </div>
     </div>
     <script src="popup.js"></script>
