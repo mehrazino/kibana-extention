@@ -1,4 +1,4 @@
-# Elastic Kibana Bulk Note Browser Extention
+# Kibana Note Extention
 
 <div align="center">
   <img src="elastic-kibana-color.png" width="100" alt="Kibana Bulk Note Logo" />
