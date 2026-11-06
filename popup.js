@@ -19,8 +19,18 @@
         clearLogs:          document.getElementById('clearLogsBtn'),
         clearLogsText:      document.getElementById('clearLogsText'),
         copyAlertsJson:     document.getElementById('copyAlertsJsonBtn'),
-        copyAlertsJsonText: document.getElementById('copyAlertsJsonText')
+        copyAlertsJsonText: document.getElementById('copyAlertsJsonText'),
+        footerLink:         document.querySelector('.footer-link')
     };
+
+    if (el.footerLink) {
+        el.footerLink.addEventListener('click', (e) => {
+            e.preventDefault();
+            try {
+                chrome.tabs.create({ url: 'https://github.com/mehrazino/kibana-extention' });
+            } catch (_) {}
+        });
+    }
 
     let prefersReducedMotion = false;
     try {
