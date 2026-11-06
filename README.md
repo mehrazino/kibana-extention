@@ -54,7 +54,7 @@ The extension uses a dual-script architecture to ensure stability and security:
 ### The Fetch Interception Workflow
 1. When you add a note, Kibana sends a `PATCH` request to its internal notes API.
 2. The extension intercepts this request, extracts the source alert ID, and the note text.
-3. It then determines the IDs of all other selected alerts. To do this reliably across different Kibana versions, the extension triggers Kibana's native bulk action mechanism. **This is why the selected alerts briefly open (flyout) when you perform an action:** it forces Kibana to generate the exact list of targeted document IDs in the network payload, which the extension then intercepts. (It also tries the DOM and Search API as fallbacks).
+3. It then determines the IDs of all other selected alerts. To do this reliably across different Kibana versions, the extension triggers Kibana's native bulk action mechanism. **This is why the selected alerts open when you perform an action:** it forces Kibana to generate the exact list of targeted document IDs in the network payload, which the extension then intercepts.
 4. Finally, it issues concurrent `PATCH` requests for every target alert, seamlessly mirroring the note without triggering unnecessary UI refreshes.
 
 ## 📦 Installation
@@ -81,9 +81,8 @@ Since this is a self-hosted extension, you need to load it manually into your br
 2. Open the extension popup and ensure **Bulk Note** is toggled **ON**
 3. Select multiple alerts using the checkboxes on the left side of the DataGrid.
 4. Open the flyout for **one** of the selected alerts.
-5. Open the extension popup and ensure **Bulk Note** is toggled **ON**
-6. Add your note to the notes section and save it.
-7. Check the **Activity Logs** in the popup to see the note being applied to the other alerts in real-time.
+5. Add your note to the notes section and save it.
+6. Check the **Activity Logs** in the popup to see the note being applied to the other alerts in real-time.
 
 ### 2. Delete Duplicate Notes
 1. Toggle **Delete Duplicate Notes** to **ON** in the extension popup.
