@@ -1,0 +1,58 @@
+{
+    "manifest_version": 3,
+    "name": "Kibana Bulk Note",
+    "version": "1.0.1",
+    "description": "Mirrors a note to all selected alerts. Works on any Kibana DataGrid.",
+    "minimum_chrome_version": "111",
+
+    "permissions": [
+        "activeTab",
+        "storage",
+        "clipboardWrite",
+        "scripting"
+    ],
+
+    "background": {
+        "service_worker": "background.js",
+        "scripts": ["background.js"]
+    },
+
+    "icons": {
+        "16":  "elastic-kibana-gray.png",
+        "32":  "elastic-kibana-gray.png",
+        "48":  "elastic-kibana-gray.png",
+        "128": "elastic-kibana-gray.png"
+    },
+
+    "action": {
+        "default_popup": "popup.html",
+        "default_title": "Kibana Bulk Note",
+        "default_icon": {
+            "16":  "elastic-kibana-gray.png",
+            "32":  "elastic-kibana-gray.png",
+            "48":  "elastic-kibana-gray.png",
+            "128": "elastic-kibana-gray.png"
+        }
+    },
+
+    "content_scripts": [
+        {
+            "matches": ["*://*/app/*"],
+            "js": ["page-script.js"],
+            "run_at": "document_start",
+            "world": "MAIN"
+        },
+        {
+            "matches": ["*://*/app/*"],
+            "js": ["content.js"],
+            "run_at": "document_start"
+        }
+    ],
+
+    "browser_specific_settings": {
+        "gecko": {
+            "id": "kibana-bulk-note@local",
+            "strict_min_version": "128.0"
+        }
+    }
+}
