@@ -5,21 +5,27 @@
         KBN_VERSION: '8.19.5',
         KBN_BUILD_NUMBER: '13',
         ELASTIC_API_VERSION: '2023-10-31',
-        DELAY_BETWEEN_REQUESTS_MS: 10,
-        REFRESH_DELAY_MS: 250,
-        VERIFY_DELAY_MS: 100,
-        COPY_CONCURRENCY: 10,
-        DELETE_CONCURRENCY: 4,
+        DELAY_BETWEEN_REQUESTS_MS: 5,
+        REFRESH_DELAY_MS: 200,
+        VERIFY_DELAY_MS: 50,
+        COPY_CONCURRENCY: 20,
+        DELETE_CONCURRENCY: 10,
         LOG_PER_ALERT_LIMIT: 20,
         API_BATCH_SIZE: 500,
         API_MAX_BATCHES: 40,
         BULK_PROBE_TIMEOUT_MS: 1500,
         MENU_ACTION_WAIT_MS: 1000,
-        MENU_ACTION_POLL_MS: 15
+        MENU_ACTION_POLL_MS: 15,
+        ASSIGN_CHUNK_SIZE: 100
     };
+
+    const USER_ID_TTL_MS = 5 * 60 * 1000;
 
     let enabled = false;
     let deleteMode = false;
+    let autoAssignEnabled = false;
+    let cachedUserId = null;
+    let cachedUserIdAt = 0;
 
     let pendingBulkProbe = null;
     let pendingDelete = null;
@@ -34,6 +40,95 @@
 
     let patchChain = Promise.resolve();
     let deleteChain = Promise.resolve();
+
+    let toastSuppressionCount = 0;
+    let toastObserver = null;
+    let suppressionStyleEl = null;
+
+    function ensureSuppressionStyle() {
+        if (suppressionStyleEl && suppressionStyleEl.isConnected) return;
+        suppressionStyleEl = document.createElement('style');
+        suppressionStyleEl.id = 'bulk-note-suppression';
+        suppressionStyleEl.textContent = [
+            '.euiToast[data-bulk-probe-suppressed="true"] { display: none !important; }',
+            'html[data-bulk-probe-active="true"] .euiPopover:has(.euiContextMenu),',
+            'html[data-bulk-probe-active="true"] .euiPopover__panel:has(.euiContextMenu),',
+            'html[data-bulk-probe-active="true"] .euiContextMenu,',
+            'html[data-bulk-probe-active="true"] .euiContextMenuPanel,',
+            'html[data-bulk-probe-active="true"] .euiPopover__arrowWrapper {',
+            '  visibility: hidden !important;',
+            '  pointer-events: none !important;',
+            '  transition: none !important;',
+            '  animation: none !important;',
+            '}'
+        ].join('\n');
+        (document.head || document.documentElement).appendChild(suppressionStyleEl);
+    }
+
+    function startToastSuppression() {
+        toastSuppressionCount++;
+        ensureSuppressionStyle();
+        if (toastSuppressionCount === 1) {
+            document.documentElement.setAttribute('data-bulk-probe-active', 'true');
+        }
+        if (toastObserver) return;
+
+        const attach = () => {
+            if (toastSuppressionCount <= 0) return;
+            const container = document.querySelector('[data-test-subj="globalToastList"]');
+            if (!container) {
+                setTimeout(attach, 100);
+                return;
+            }
+
+            toastObserver = new MutationObserver((mutations) => {
+                for (const m of mutations) {
+                    for (const node of m.addedNodes) {
+                        if (node.nodeType !== 1) continue;
+                        if (!node.classList || !node.classList.contains('euiToast')) continue;
+                        const titleEl = node.querySelector('[data-test-subj="euiToastHeader__title"]');
+                        const titleText = titleEl ? (titleEl.textContent || '').toLowerCase() : '';
+                        if (titleText.includes('opened') ||
+                            titleText.includes('closed') ||
+                            titleText.includes('acknowledged')) {
+                            node.setAttribute('data-bulk-probe-suppressed', 'true');
+                        }
+                    }
+                }
+            });
+            toastObserver.observe(container, { childList: true });
+        };
+        attach();
+    }
+
+    function releaseToastSuppression(delayMs) {
+        const d = typeof delayMs === 'number' ? delayMs : 2000;
+        setTimeout(() => {
+            toastSuppressionCount = Math.max(0, toastSuppressionCount - 1);
+            if (toastSuppressionCount === 0) {
+                document.documentElement.removeAttribute('data-bulk-probe-active');
+                if (toastObserver) {
+                    toastObserver.disconnect();
+                    toastObserver = null;
+                }
+            }
+        }, d);
+    }
+
+    function hudStart(type, total) {
+        try { return window.__bulkNoteHud ? window.__bulkNoteHud.start(type, total) : null; }
+        catch (_) { return null; }
+    }
+
+    function hudUpdate(id, patch) {
+        if (!id) return;
+        try { if (window.__bulkNoteHud) window.__bulkNoteHud.update(id, patch); } catch (_) {}
+    }
+
+    function hudComplete(id, status) {
+        if (!id) return;
+        try { if (window.__bulkNoteHud) window.__bulkNoteHud.complete(id, status); } catch (_) {}
+    }
 
     function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
@@ -161,12 +256,15 @@
 
     async function probeBulkSignalIds() {
         return new Promise((resolve) => {
+            startToastSuppression();
+
             let settled = false;
 
             const timer = setTimeout(() => {
                 if (settled) return;
                 settled = true;
                 pendingBulkProbe = null;
+                releaseToastSuppression(2000);
                 logEvent('warn', '[bulk-probe] Timeout waiting for signal_ids');
                 resolve(null);
             }, CONFIG.BULK_PROBE_TIMEOUT_MS);
@@ -177,6 +275,7 @@
                     settled = true;
                     clearTimeout(timer);
                     pendingBulkProbe = null;
+                    releaseToastSuppression(2000);
                     resolve(ids);
                 }
             };
@@ -189,6 +288,7 @@
                 pendingBulkProbe = null;
                 clearTimeout(timer);
                 settled = true;
+                releaseToastSuppression(500);
                 resolve(null);
                 return;
             }
@@ -202,6 +302,7 @@
                 pendingBulkProbe = null;
                 clearTimeout(timer);
                 settled = true;
+                releaseToastSuppression(500);
                 resolve(null);
                 return;
             }
@@ -221,6 +322,7 @@
                         pendingBulkProbe = null;
                         clearTimeout(timer);
                         settled = true;
+                        releaseToastSuppression(500);
                         resolve(null);
                         return;
                     }
@@ -233,6 +335,7 @@
                         settled = true;
                         pendingBulkProbe = null;
                         clearTimeout(timer);
+                        releaseToastSuppression(500);
                         resolve(null);
                     }
                 }
@@ -389,6 +492,9 @@
 
                 logEvent('info', '[bulk-intercept] Aborting probe request');
                 return new Response(JSON.stringify({
+                    took: 1,
+                    timed_out: false,
+                    total: updatedCount,
                     updated: updatedCount,
                     version: CONFIG.KBN_VERSION,
                     failures: [],
@@ -490,6 +596,9 @@
         const verbose = actual.length <= CONFIG.LOG_PER_ALERT_LIMIT;
         let ok = 0;
         let fail = 0;
+        const successfulIds = [];
+
+        const hudId = hudStart('copy', actual.length);
 
         await runWithConcurrency(actual, CONFIG.COPY_CONCURRENCY, async (id) => {
             try {
@@ -500,6 +609,7 @@
                 });
                 if (r.ok) {
                     ok++;
+                    successfulIds.push(id);
                     if (verbose) logEvent('info', `[copy] ${safeSlice(id, 8)} OK`);
                 } else {
                     fail++;
@@ -509,6 +619,7 @@
                 fail++;
                 logEvent('error', `[copy] ${safeSlice(id, 8)} ${e.message}`);
             }
+            hudUpdate(hudId, { completed: ok, failed: fail });
             await sleep(CONFIG.DELAY_BETWEEN_REQUESTS_MS);
         });
 
@@ -516,8 +627,132 @@
         if (fail > 0 && ok > 0) lvl = 'warn';
         else if (fail > 0 && ok === 0) lvl = 'error';
         logEvent(lvl, `[copy] Done: ${ok} OK, ${fail} failed`);
+
+        hudComplete(hudId, fail > 0 && ok === 0 ? 'failed' : 'complete');
+
+        if (autoAssignEnabled) {
+            const idsToAssign = [...successfulIds];
+            if (sourceEventId) idsToAssign.push(sourceEventId);
+            if (idsToAssign.length > 0) {
+                await performAutoAssign(idsToAssign);
+            }
+        }
+
         send('COPY_DONE', { ok, fail });
         setTimeout(refreshTable, CONFIG.REFRESH_DELAY_MS);
+    }
+
+    async function getCurrentUserId() {
+        try {
+            const meRes = await originalFetch('/internal/security/me', { headers: buildHeaders() });
+            if (meRes.ok) {
+                const me = await meRes.json();
+                if (me.profile_uid) {
+                    return me.profile_uid;
+                }
+                if (me.username) {
+                    logEvent('info', `[assign] /me returned no profile_uid, falling back to users/_find for "${me.username}"`);
+                    const foundUid = await lookupUserIdByUsername(me.username);
+                    if (foundUid) return foundUid;
+                }
+            } else {
+                logEvent('warn', `[assign] /internal/security/me HTTP ${meRes.status}`);
+            }
+        } catch (e) {
+            logEvent('warn', `[assign] /me failed: ${e.message}`);
+        }
+        return null;
+    }
+
+    async function getUserIdWithTTL() {
+        if (cachedUserId && (Date.now() - cachedUserIdAt < USER_ID_TTL_MS)) {
+            return cachedUserId;
+        }
+        const fresh = await getCurrentUserId();
+        if (fresh) {
+            cachedUserId = fresh;
+            cachedUserIdAt = Date.now();
+            logEvent('info', `[assign] Resolved user: ${fresh}`);
+            return fresh;
+        }
+        cachedUserId = null;
+        cachedUserIdAt = 0;
+        return null;
+    }
+
+    async function lookupUserIdByUsername(username) {
+        try {
+            const headers = buildHeaders();
+            headers['elastic-api-version'] = '1';
+            const url = `/internal/detection_engine/users/_find?searchTerm=${encodeURIComponent(username)}`;
+            const res = await originalFetch(url, { headers });
+            if (!res.ok) {
+                logEvent('warn', `[assign] users/_find HTTP ${res.status}`);
+                return null;
+            }
+            const data = await res.json();
+            const users = data.users || [];
+            for (const user of users) {
+                if (user.name === username && user.uid) {
+                    return user.uid;
+                }
+            }
+            if (users.length > 0 && users[0].uid) {
+                return users[0].uid;
+            }
+        } catch (e) {
+            logEvent('warn', `[assign] users/_find failed: ${e.message}`);
+        }
+        return null;
+    }
+
+    async function performAutoAssign(ids) {
+        try {
+            const uid = await getUserIdWithTTL();
+            if (!uid) {
+                throw new Error('Could not resolve current user profile_uid');
+            }
+
+            logEvent('info', `[assign] Assigning ${ids.length} alert(s) to ${uid}`);
+
+            const hudId = hudStart('assign', ids.length);
+            let totalAssigned = 0;
+            let assignFails = 0;
+
+            for (let i = 0; i < ids.length; i += CONFIG.ASSIGN_CHUNK_SIZE) {
+                const chunk = ids.slice(i, i + CONFIG.ASSIGN_CHUNK_SIZE);
+                const res = await originalFetch('/api/detection_engine/signals/assignees', {
+                    method: 'POST',
+                    headers: buildHeaders(),
+                    body: JSON.stringify({
+                        assignees: { add: [uid], remove: [] },
+                        ids: chunk
+                    })
+                });
+
+                if (res.ok) {
+                    totalAssigned += chunk.length;
+                } else {
+                    assignFails += chunk.length;
+                    const errText = await res.text().catch(() => '');
+                    logEvent('error', `[assign] HTTP ${res.status} for chunk of ${chunk.length}${errText ? ' — ' + errText.slice(0, 200) : ''}`);
+                }
+                hudUpdate(hudId, { completed: totalAssigned, failed: assignFails });
+            }
+
+            if (totalAssigned > 0) {
+                logEvent('success', `[assign] Successfully assigned ${totalAssigned} alert(s) to you`);
+            }
+            if (assignFails > 0) {
+                logEvent('warn', `[assign] Failed to assign ${assignFails} alert(s)`);
+            }
+
+            hudComplete(hudId, totalAssigned === 0 ? 'failed' : 'complete');
+        } catch (e) {
+            logEvent('error', `[assign] Failed: ${e.message}`);
+            cachedUserId = null;
+            cachedUserIdAt = 0;
+        }
     }
 
     async function fetchNotes(id) {
@@ -554,12 +789,15 @@
         let fail = 0;
         let nm = 0;
 
+        const hudId = hudStart('delete', ids.length);
+
         await runWithConcurrency(ids, CONFIG.DELETE_CONCURRENCY, async (id) => {
             try {
                 const notes = await fetchNotes(id);
                 if (notes === null) {
                     fail++;
                     logEvent('error', `[delete] ${safeSlice(id, 8)} fetch failed`);
+                    hudUpdate(hudId, { completed: ok + nm, failed: fail });
                     return;
                 }
 
@@ -574,6 +812,7 @@
                 if (!found || !found.noteId) {
                     nm++;
                     if (verbose) logEvent('info', `[delete] ${safeSlice(id, 8)} no match`);
+                    hudUpdate(hudId, { completed: ok + nm, failed: fail });
                     return;
                 }
 
@@ -586,6 +825,7 @@
                 if (!d.ok) {
                     fail++;
                     logEvent('error', `[delete] ${safeSlice(id, 8)} HTTP ${d.status}`);
+                    hudUpdate(hudId, { completed: ok + nm, failed: fail });
                     return;
                 }
 
@@ -594,10 +834,7 @@
                 if (v === null) {
                     fail++;
                     logEvent('warn', `[delete] ${safeSlice(id, 8)} verify failed`);
-                    return;
-                }
-
-                if (v.some(n => n.noteId === found.noteId)) {
+                } else if (v.some(n => n.noteId === found.noteId)) {
                     fail++;
                     logEvent('error', `[delete] ${safeSlice(id, 8)} verify: still present`);
                 } else {
@@ -608,6 +845,7 @@
                 fail++;
                 logEvent('error', `[delete] ${safeSlice(id, 8)} ${e.message}`);
             }
+            hudUpdate(hudId, { completed: ok + nm, failed: fail });
             await sleep(CONFIG.DELAY_BETWEEN_REQUESTS_MS);
         });
 
@@ -615,6 +853,9 @@
         if (fail > 0 && ok > 0) lvl = 'warn';
         else if (fail > 0 && ok === 0) lvl = 'error';
         logEvent(lvl, `[delete] Done: ${ok} OK, ${fail} failed, ${nm} no-match`);
+
+        hudComplete(hudId, fail > 0 && ok === 0 ? 'failed' : 'complete');
+
         setTimeout(refreshTable, CONFIG.REFRESH_DELAY_MS);
     }
 
@@ -730,6 +971,7 @@
             'kbn-version': CONFIG.KBN_VERSION,
             'kbn-build-number': CONFIG.KBN_BUILD_NUMBER,
             'elastic-api-version': CONFIG.ELASTIC_API_VERSION,
+            'kbn-xsrf': 'true',
             'x-elastic-internal-origin': 'Kibana',
             'x-kbn-context': JSON.stringify({
                 type: 'application',
@@ -773,6 +1015,8 @@
             }
         } else if (type === 'SET_DELETE_MODE') {
             deleteMode = !!data;
+        } else if (type === 'SET_AUTO_ASSIGN') {
+            autoAssignEnabled = !!data;
         } else if (type === 'SET_VERSION') {
             if (data && data.kbnVersion) CONFIG.KBN_VERSION = data.kbnVersion;
         } else if (type === 'TRIGGER_REFRESH') {
