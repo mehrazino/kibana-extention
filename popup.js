@@ -4,6 +4,8 @@
     const el = {
         toggle:             document.getElementById('toggle-switch'),
         toggleDelete:       document.getElementById('toggle-delete'),
+        toggleAutoAssign:   document.getElementById('toggle-auto-assign'),
+        assignIcon:         document.getElementById('assign-icon'),
         deleteSwitchLabel:  document.getElementById('delete-switch-label'),
         deleteIcon:         document.getElementById('delete-icon'),
         toggleLogs:         document.getElementById('toggle-logs'),
@@ -20,6 +22,8 @@
         clearLogsText:      document.getElementById('clearLogsText'),
         copyAlertsJson:     document.getElementById('copyAlertsJsonBtn'),
         copyAlertsJsonText: document.getElementById('copyAlertsJsonText'),
+        bulkCard:           document.getElementById('bulk-card'),
+        bulkBody:           document.getElementById('bulk-body'),
         footerLink:         document.querySelector('.footer-link')
     };
 
@@ -88,6 +92,10 @@
         if (el.deleteIcon) el.deleteIcon.classList.toggle('is-active', !!isActive);
     }
 
+    function updateAssignIcon(isActive) {
+        if (el.assignIcon) el.assignIcon.classList.toggle('is-active', !!isActive);
+    }
+
     function updateLogsIcon(isActive) {
         if (el.logsIcon) el.logsIcon.classList.toggle('is-active', !!isActive);
     }
@@ -98,12 +106,26 @@
         if (el.copyAlertsJson) el.copyAlertsJson.classList.toggle('btn-yellow', ready);
     }
 
-    function setMainToggleAvailable(available) {
-        if (!el.toggle) return;
-        el.toggle.disabled = !available;
-        const wrapper = el.toggle.closest('.switch');
-        if (wrapper) wrapper.classList.toggle('disabled', !available);
-        if (el.brandLogo) el.brandLogo.classList.toggle('disabled', !available);
+    function setAllControlsDisabled(disabled) {
+        const switches = [el.toggle, el.toggleDelete, el.toggleAutoAssign, el.toggleLogs];
+        for (const s of switches) {
+            if (!s) continue;
+            s.disabled = disabled;
+            const wrapper = s.closest('.switch');
+            if (wrapper) wrapper.classList.toggle('disabled', disabled);
+        }
+
+        const icons = [el.brandLogo, el.deleteIcon, el.assignIcon, el.copyJsonIcon, el.logsIcon];
+        for (const i of icons) {
+            if (!i) continue;
+            i.classList.toggle('disabled', disabled);
+        }
+
+        const buttons = [el.copyAlertsJson, el.copyLogs, el.clearLogs];
+        for (const b of buttons) {
+            if (!b) continue;
+            b.disabled = disabled;
+        }
     }
 
     function scrollLogsToBottom() {
@@ -165,6 +187,25 @@
         el.logsCard.classList.toggle('open', open);
 
         panelAnimTimer = setTimeout(finishPanelAnimation, PANEL_ANIM_FALLBACK);
+    }
+
+    function applyBulkOpen(open, animate = true) {
+        if (!el.bulkCard) return;
+
+        const wasOpen = el.bulkCard.classList.contains('open');
+        if (wasOpen === open) return;
+
+        if (!animate || prefersReducedMotion) {
+            if (el.bulkBody) el.bulkBody.style.transition = 'none';
+            el.bulkCard.classList.toggle('open', open);
+            if (el.bulkBody) {
+                void el.bulkBody.offsetHeight;
+                el.bulkBody.style.transition = '';
+            }
+            return;
+        }
+
+        el.bulkCard.classList.toggle('open', open);
     }
 
     if (el.logsBody) {
@@ -377,20 +418,48 @@
     }
 
     function render(state) {
-        if (!state) {
-            setMainToggleAvailable(false);
+        if (!state || !state.pageDetected) {
+            if (panelAnimTimer) {
+                clearTimeout(panelAnimTimer);
+                panelAnimTimer = null;
+            }
+            isPanelAnimating = false;
+            pendingRenderWhileAnimating = false;
+            if (el.logsCard) el.logsCard.classList.remove('animating');
+
+            setAllControlsDisabled(true);
+
+            if (el.toggle) el.toggle.checked = false;
+            if (el.toggleDelete) el.toggleDelete.checked = false;
+            if (el.toggleAutoAssign) el.toggleAutoAssign.checked = false;
+            if (el.toggleLogs) el.toggleLogs.checked = false;
+
             updateBrandIcon(false);
             updateDeleteIcon(false);
+            updateAssignIcon(false);
+            updateLogsIcon(false);
             updateJsonCopyReady(false);
+
+            applyBulkOpen(false, false);
+            applyLogsOpen(false, false);
+
+            if (state && Array.isArray(state.lastEvents)) {
+                const changed = mergeLogs(state.lastEvents);
+                if (changed) {
+                    updateLogsCount(logCache.length);
+                    renderLogEntries(true);
+                }
+            }
             return;
         }
 
-        setMainToggleAvailable(true);
+        setAllControlsDisabled(false);
         currentState = state;
 
         if (!pendingToggle) {
             if (el.toggle.checked !== state.enabled) el.toggle.checked = state.enabled;
             updateBrandIcon(state.enabled);
+            applyBulkOpen(state.enabled, false);
         }
 
         if (!pendingToggleDelete) {
@@ -398,6 +467,13 @@
                 el.toggleDelete.checked = state.deleteMode;
             }
             updateDeleteIcon(state.deleteMode);
+        }
+
+        if (el.toggleAutoAssign && typeof state.autoAssignEnabled === 'boolean') {
+            if (el.toggleAutoAssign.checked !== state.autoAssignEnabled) {
+                el.toggleAutoAssign.checked = state.autoAssignEnabled;
+            }
+            updateAssignIcon(state.autoAssignEnabled);
         }
 
         updateJsonCopyReady((state.alertsCaptured || 0) > 0);
@@ -416,7 +492,7 @@
         const res = await new Promise((resolve) => {
             try {
                 chrome.storage.local.get(
-                    ['bulkNoteEnabled', 'bulkNoteDeleteMode', 'bulkNoteLogsOpen'],
+                    ['bulkNoteEnabled', 'bulkNoteDeleteMode', 'bulkNoteAutoAssign', 'bulkNoteLogsOpen'],
                     (r) => resolve(r || {})
                 );
             } catch { resolve({}); }
@@ -431,7 +507,6 @@
         const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
 
         if (!tab || !tab.id) {
-            applyLogsOpen(!!res.bulkNoteLogsOpen, false);
             render(null);
             revealNow();
             return;
@@ -444,14 +519,13 @@
             catch { return null; }
         };
 
-        render(await sendMsg({ type: 'GET_STATE', sinceSeq: 0 }));
+        const tabState = await sendMsg({ type: 'GET_STATE', sinceSeq: 0 });
 
-        applyLogsOpen(!!res.bulkNoteLogsOpen, false);
+        render(tabState);
 
-        el.toggle.checked = !!res.bulkNoteEnabled;
-        el.toggleDelete.checked = !!res.bulkNoteDeleteMode;
-        updateBrandIcon(!!res.bulkNoteEnabled);
-        updateDeleteIcon(!!res.bulkNoteDeleteMode);
+        if (tabState && tabState.pageDetected) {
+            applyLogsOpen(!!res.bulkNoteLogsOpen, false);
+        }
 
         revealNow();
 
@@ -459,6 +533,7 @@
             const wanted = el.toggle.checked;
             pendingToggle = true;
             updateBrandIcon(wanted);
+            applyBulkOpen(wanted);
 
             let resp = null;
             try { resp = await sendMsg({ type: 'TOGGLE' }); } catch {}
@@ -469,9 +544,11 @@
                 if (currentState) currentState.enabled = resp.enabled;
                 el.toggle.checked = resp.enabled;
                 updateBrandIcon(resp.enabled);
+                applyBulkOpen(resp.enabled);
             } else {
                 el.toggle.checked = !wanted;
                 updateBrandIcon(!wanted);
+                applyBulkOpen(!wanted);
             }
         });
 
@@ -495,13 +572,44 @@
             }
         });
 
+        if (el.toggleAutoAssign) {
+            el.toggleAutoAssign.addEventListener('change', async () => {
+                const wanted = el.toggleAutoAssign.checked;
+                updateAssignIcon(wanted);
+
+                let resp = null;
+                try { resp = await sendMsg({ type: 'TOGGLE_AUTO_ASSIGN' }); } catch {}
+
+                if (resp && typeof resp.autoAssignEnabled === 'boolean') {
+                    if (currentState) currentState.autoAssignEnabled = resp.autoAssignEnabled;
+                    el.toggleAutoAssign.checked = resp.autoAssignEnabled;
+                    updateAssignIcon(resp.autoAssignEnabled);
+                } else {
+                    el.toggleAutoAssign.checked = !wanted;
+                    updateAssignIcon(!wanted);
+                }
+            });
+        }
+
         el.copyLogs.addEventListener('click', async () => {
             if (logCache.length === 0) {
                 showButtonState(el.copyLogs, el.copyLogsText, 'Empty', null, 'Copy');
                 return;
             }
 
-            const logsText = logCache.map(e => `[${e.t}] ${e.msg}`).join('\n');
+            const logsText = logCache.map(e => {
+                let dateStr = '';
+                if (e.ts) {
+                    const d = new Date(e.ts);
+                    if (!isNaN(d.getTime())) {
+                        dateStr =
+                            d.getFullYear() + '-' +
+                            String(d.getMonth() + 1).padStart(2, '0') + '-' +
+                            String(d.getDate()).padStart(2, '0') + ' ';
+                    }
+                }
+                return `[${dateStr}${e.t}] ${e.msg}`;
+            }).join('\n');
 
             let ok = false;
             try {
@@ -650,15 +758,20 @@
         });
 
         bindIconActivation(el.deleteIcon, () => {
-            if (el.toggleDelete) el.toggleDelete.click();
+            if (el.toggleDelete && !el.toggleDelete.disabled) el.toggleDelete.click();
+        });
+
+        bindIconActivation(el.assignIcon, () => {
+            if (el.toggleAutoAssign && !el.toggleAutoAssign.disabled) el.toggleAutoAssign.click();
         });
 
         bindIconActivation(el.logsIcon, () => {
-            if (el.toggleLogs) el.toggleLogs.click();
+            if (el.toggleLogs && !el.toggleLogs.disabled) el.toggleLogs.click();
         });
 
         bindIconActivation(el.copyJsonIcon, () => {
             if (jsonCopyWorking) return;
+            if (el.copyAlertsJson && el.copyAlertsJson.disabled) return;
             doCopyAlertsJson();
         });
 
