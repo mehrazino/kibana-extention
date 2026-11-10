@@ -7,88 +7,107 @@
 </head>
 <body>
     <div class="app">
-        <div class="settings-card">
-            <div class="setting-row">
-                <div class="feature-icon icon-blue" id="brand-logo" role="button" tabindex="0" aria-label="Toggle Bulk Note">
-                    <svg viewBox="0 0 16 16" aria-hidden="true">
-                        <path d="M5 7a1 1 0 1 0 0-2 1 1 0 0 0 0 2Zm4-1a1 1 0 1 1-2 0 1 1 0 0 1 2 0Zm2 1a1 1 0 1 0 0-2 1 1 0 0 0 0 2Z"/>
-                        <path fill-rule="evenodd" d="M2 1a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h2v4.414L8.414 11H14a1 1 0 0 0 1-1V2a1 1 0 0 0-1-1H2Zm3 12v-3H2V2h12v8H8l-3 3Z" clip-rule="evenodd"/>
-                    </svg>
+        <div class="app-scroll">
+            <div class="settings-card bulk-card" id="bulk-card">
+                <div class="setting-row">
+                    <div class="feature-icon icon-blue" id="brand-logo" role="button" tabindex="0" aria-label="Toggle Bulk Note">
+                        <svg viewBox="0 0 16 16" aria-hidden="true">
+                            <path d="M5 7a1 1 0 1 0 0-2 1 1 0 0 0 0 2Zm4-1a1 1 0 1 1-2 0 1 1 0 0 1 2 0Zm2 1a1 1 0 1 0 0-2 1 1 0 0 0 0 2Z"/>
+                            <path fill-rule="evenodd" d="M2 1a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h2v4.414L8.414 11H14a1 1 0 0 0 1-1V2a1 1 0 0 0-1-1H2Zm3 12v-3H2V2h12v8H8l-3 3Z" clip-rule="evenodd"/>
+                        </svg>
+                    </div>
+                    <span class="setting-label">Bulk Note</span>
+                    <label class="switch" title="Toggle Extension">
+                        <input type="checkbox" id="toggle-switch">
+                        <span class="slider"></span>
+                    </label>
                 </div>
-                <span class="setting-label">Bulk Note</span>
-                <label class="switch" title="Toggle Extension">
-                    <input type="checkbox" id="toggle-switch">
-                    <span class="slider"></span>
-                </label>
+                <div class="bulk-body" id="bulk-body">
+                    <div class="bulk-body-clip">
+                        <div class="bulk-body-inner">
+                            <div class="setting-row" style="border-top: 1px solid var(--border-subtle);">
+                                <div class="feature-icon icon-purple" id="assign-icon" role="button" tabindex="0" aria-label="Toggle Auto-assign">
+                                    <svg viewBox="0 0 16 16" aria-hidden="true">
+                                        <path d="M8 0a3 3 0 1 0 0 6 3 3 0 0 0 0-6ZM6 3a2 2 0 1 1 4 0 2 2 0 0 1-4 0Zm1 5a4 4 0 0 0-4 4v3h1v-3a3 3 0 0 1 3-3h2a3 3 0 0 1 3 3v3h1v-3a4 4 0 0 0-4-4H7Z"/>
+                                    </svg>
+                                </div>
+                                <span class="setting-label">Auto-assign to me</span>
+                                <label class="switch switch-sm switch-purple" id="assign-switch-label">
+                                    <input type="checkbox" id="toggle-auto-assign">
+                                    <span class="slider"></span>
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
-        </div>
 
-        <div class="settings-card">
-            <div class="setting-row">
-                <div class="feature-icon icon-red" id="delete-icon" role="button" tabindex="0" aria-label="Toggle Delete Duplicate Notes">
-                    <svg viewBox="0 0 16 16" aria-hidden="true">
-                        <path d="M7 6H6v6h1V6Zm2.997 0h-1v6h1V6Z"/>
-                        <path fill-rule="evenodd" d="M5 2v1H2v1h1v10a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V4h1V3h-3V2a1 1 0 0 0-1-1H6a1 1 0 0 0-1 1Zm5 0H6v1h4V2ZM4 14V4h8v10H4Z" clip-rule="evenodd"/>
-                    </svg>
+            <div class="settings-card">
+                <div class="setting-row">
+                    <div class="feature-icon icon-red" id="delete-icon" role="button" tabindex="0" aria-label="Toggle Delete Duplicate Notes">
+                        <svg viewBox="0 0 16 16" aria-hidden="true">
+                            <path d="M7 6H6v6h1V6Zm2.997 0h-1v6h1V6Z"/>
+                            <path fill-rule="evenodd" d="M5 2v1H2v1h1v10a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V4h1V3h-3V2a1 1 0 0 0-1-1H6a1 1 0 0 0-1 1Zm5 0H6v1h4V2ZM4 14V4h8v10H4Z" clip-rule="evenodd"/>
+                        </svg>
+                    </div>
+                    <span class="setting-label">Delete Duplicate Notes</span>
+                    <label class="switch switch-sm switch-danger" id="delete-switch-label">
+                        <input type="checkbox" id="toggle-delete">
+                        <span class="slider"></span>
+                    </label>
                 </div>
-                <span class="setting-label">Delete Duplicate Notes</span>
-                <label class="switch switch-sm switch-danger" id="delete-switch-label">
-                    <input type="checkbox" id="toggle-delete">
-                    <span class="slider"></span>
-                </label>
             </div>
-        </div>
 
-        <div class="settings-card">
-            <div class="setting-row">
-                <div class="feature-icon icon-yellow" id="copy-json-icon" role="button" tabindex="0" aria-label="Copy selected alerts JSON">
-                    <svg viewBox="0 0 16 16" aria-hidden="true">
-                        <path d="M2 2.729V2a1 1 0 0 1 1-1h2v1H3v12h4v1H3a1 1 0 0 1-1-1V2.729zM14 5V2a1 1 0 0 0-1-1h-2v1h2v3h1zm-1 1h2v9H8V6h5V5H8a1 1 0 0 0-1 1v9a1 1 0 0 0 1 1h7a1 1 0 0 0 1-1V6a1 1 0 0 0-1-1h-2v1z"/>
-                        <path d="M9 10h5V9H9v1zm0-2h5V7H9v1zm0 4h5v-1H9v1zm0 2h5v-1H9v1zm2-12V1a1 1 0 0 0-1-1H6a1 1 0 0 0-1 1v1h1V1h4v1h1zM5 3h6V2H5v1z"/>
-                    </svg>
+            <div class="settings-card">
+                <div class="setting-row">
+                    <div class="feature-icon icon-yellow" id="copy-json-icon" role="button" tabindex="0" aria-label="Copy selected alerts JSON">
+                        <svg viewBox="0 0 16 16" aria-hidden="true">
+                            <path d="M2 2.729V2a1 1 0 0 1 1-1h2v1H3v12h4v1H3a1 1 0 0 1-1-1V2.729zM14 5V2a1 1 0 0 0-1-1h-2v1h2v3h1zm-1 1h2v9H8V6h5V5H8a1 1 0 0 0-1 1v9a1 1 0 0 0 1 1h7a1 1 0 0 0 1-1V6a1 1 0 0 0-1-1h-2v1z"/>
+                            <path d="M9 10h5V9H9v1zm0-2h5V7H9v1zm0 4h5v-1H9v1zm0 2h5v-1H9v1zm2-12V1a1 1 0 0 0-1-1H6a1 1 0 0 0-1 1v1h1V1h4v1h1zM5 3h6V2H5v1z"/>
+                        </svg>
+                    </div>
+                    <span class="setting-label">Copy Alerts JSON</span>
+                    <button id="copyAlertsJsonBtn" class="btn btn-inline" type="button">
+                        <span id="copyAlertsJsonText">Copy</span>
+                    </button>
                 </div>
-                <span class="setting-label">Copy Alerts JSON</span>
-                <button id="copyAlertsJsonBtn" class="btn btn-inline" type="button">
-                    <span id="copyAlertsJsonText">Copy</span>
-                </button>
             </div>
-        </div>
 
-        <div class="settings-card logs-card" id="logs-card">
-            <div class="setting-row">
-                <div class="feature-icon icon-green" id="logs-icon" role="button" tabindex="0" aria-label="Toggle Activity Logs">
-                    <svg viewBox="0 0 16 16" aria-hidden="true">
-                        <path d="m7.492 13.59 2-11-.984-.18-2 11 .984.18ZM4.854 5.354 2.207 8l2.647 2.646-.708.707L.793 8l3.353-3.354.708.708ZM15.207 8l-3.354-3.354-.707.708L13.793 8l-2.647 2.646.707.707L15.207 8Z"/>
-                    </svg>
+            <div class="settings-card logs-card" id="logs-card">
+                <div class="setting-row">
+                    <div class="feature-icon icon-green" id="logs-icon" role="button" tabindex="0" aria-label="Toggle Activity Logs">
+                        <svg viewBox="0 0 16 16" aria-hidden="true">
+                            <path d="m7.492 13.59 2-11-.984-.18-2 11 .984.18ZM4.854 5.354 2.207 8l2.647 2.646-.708.707L.793 8l3.353-3.354.708.708ZM15.207 8l-3.354-3.354-.707.708L13.793 8l-2.647 2.646.707.707L15.207 8Z"/>
+                        </svg>
+                    </div>
+                    <span class="setting-label">
+                        Show Activity Logs
+                        <span class="logs-count" id="logs-count">0</span>
+                    </span>
+                    <label class="switch switch-sm">
+                        <input type="checkbox" id="toggle-logs">
+                        <span class="slider"></span>
+                    </label>
                 </div>
-                <span class="setting-label">
-                    Show Activity Logs
-                    <span class="logs-count" id="logs-count">0</span>
-                </span>
-                <label class="switch switch-sm">
-                    <input type="checkbox" id="toggle-logs">
-                    <span class="slider"></span>
-                </label>
-            </div>
-            <div class="logs-body" id="logs-body">
-                <div class="logs-body-clip">
-                    <div class="logs-body-inner">
-                        <div class="logs-container" id="logs"></div>
-                        <div class="logs-actions">
-                            <button id="copyLogsBtn" class="btn btn-inline btn-copy-logs" type="button">
-                                <span id="copyLogsText">Copy</span>
-                            </button>
-                            <button id="clearLogsBtn" class="btn btn-inline btn-clear-logs" type="button">
-                                <span id="clearLogsText">Clear</span>
-                            </button>
+                <div class="logs-body" id="logs-body">
+                    <div class="logs-body-clip">
+                        <div class="logs-body-inner">
+                            <div class="logs-container" id="logs"></div>
+                            <div class="logs-actions">
+                                <button id="copyLogsBtn" class="btn btn-inline btn-copy-logs" type="button">
+                                    <span id="copyLogsText">Copy</span>
+                                </button>
+                                <button id="clearLogsBtn" class="btn btn-inline btn-clear-logs" type="button">
+                                    <span id="clearLogsText">Clear</span>
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </div>
             </div>
         </div>
-
         <div class="footer">
-            <a href="#" class="footer-link">Kibana Note Extension v1.0.3</a>
+            <a href="#" class="footer-link">Kibana Note Extension v1.0.4</a>
         </div>
     </div>
     <script src="popup.js"></script>
