@@ -1,9 +1,9 @@
 {
     "manifest_version": 3,
     "name": "Kibana Bulk Note",
-    "version": "1.0.1",
+    "version": "1.0.4",
     "description": "Mirrors a note to all selected alerts. Works on any Kibana DataGrid.",
-    "minimum_chrome_version": "111",
+    "minimum_chrome_version": "105",
 
     "permissions": [
         "activeTab",
@@ -38,7 +38,7 @@
     "content_scripts": [
         {
             "matches": ["*://*/app/*"],
-            "js": ["page-script.js"],
+            "js": ["hud.js", "page-script.js"],
             "run_at": "document_start",
             "world": "MAIN"
         },
@@ -46,6 +46,13 @@
             "matches": ["*://*/app/*"],
             "js": ["content.js"],
             "run_at": "document_start"
+        }
+    ],
+
+    "web_accessible_resources": [
+        {
+            "resources": ["intel-one-mono-woff2/*.woff2"],
+            "matches": ["https://*/*", "http://*/*"]
         }
     ],
 
