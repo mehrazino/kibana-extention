@@ -27,7 +27,8 @@
         ui: '🔄',
         interceptor: '🛡️',
         note: '📄',
-        'json-copy': '📋'
+        'json-copy': '📋',
+        assign: '👤'
     };
 
     const LEADING_EMOJI_RE =
@@ -54,6 +55,7 @@
     const state = {
         enabled: false,
         deleteMode: false,
+        autoAssignEnabled: false,
         pageDetected: /\/app\/security(\/|$)/.test(location.pathname),
         mainLoaded: false,
         fetchPatched: false,
@@ -207,6 +209,7 @@
         broadcastVersion();
         window.postMessage({ source: 'BulkNote-ISOLATED', type: 'SET_ENABLED', data: state.enabled }, '*');
         window.postMessage({ source: 'BulkNote-ISOLATED', type: 'SET_DELETE_MODE', data: state.deleteMode }, '*');
+        window.postMessage({ source: 'BulkNote-ISOLATED', type: 'SET_AUTO_ASSIGN', data: state.autoAssignEnabled }, '*');
     }
 
     function extractCount(text) {
@@ -331,6 +334,7 @@
                 sendResponse({
                     enabled: state.enabled,
                     deleteMode: state.deleteMode,
+                    autoAssignEnabled: state.autoAssignEnabled,
                     pageDetected: state.pageDetected,
                     mainLoaded: state.mainLoaded,
                     fetchPatched: state.fetchPatched,
@@ -366,6 +370,15 @@
                 addEvent(`[state] Delete Mode ${state.deleteMode ? 'ENABLED' : 'DISABLED'}`, 'info');
                 notifyBackground();
                 sendResponse({ deleteMode: state.deleteMode });
+                return;
+            }
+
+            if (msg.type === 'TOGGLE_AUTO_ASSIGN') {
+                state.autoAssignEnabled = !state.autoAssignEnabled;
+                try { chrome.storage.local.set({ bulkNoteAutoAssign: state.autoAssignEnabled }); } catch (_) {}
+                window.postMessage({ source: 'BulkNote-ISOLATED', type: 'SET_AUTO_ASSIGN', data: state.autoAssignEnabled }, '*');
+                addEvent(`[state] Auto-assign ${state.autoAssignEnabled ? 'ENABLED' : 'DISABLED'}`, 'info');
+                sendResponse({ autoAssignEnabled: state.autoAssignEnabled });
                 return;
             }
 
@@ -472,6 +485,7 @@
             chrome.storage.local.get([
                 'bulkNoteEnabled',
                 'bulkNoteDeleteMode',
+                'bulkNoteAutoAssign',
                 'bulkNoteKbnVersion',
                 LOG_STORAGE_KEY,
                 LOG_SEQ_STORAGE_KEY
@@ -503,6 +517,7 @@
 
                 state.enabled = !!res.bulkNoteEnabled;
                 state.deleteMode = !!res.bulkNoteDeleteMode;
+                state.autoAssignEnabled = !!res.bulkNoteAutoAssign;
                 manualVersion = res.bulkNoteKbnVersion ? String(res.bulkNoteKbnVersion) : null;
                 state.kbnVersion = getEffectiveVersion();
 
@@ -515,6 +530,7 @@
                 );
                 addEvent(`[init] State: ${state.enabled ? 'ENABLED' : 'DISABLED'} (v${state.kbnVersion})`, 'info');
                 addEvent(`[init] Page: ${state.pageDetected ? 'detected' : 'not detected'}`, 'info');
+                addEvent(`[init] Auto-assign: ${state.autoAssignEnabled ? 'ON' : 'OFF'}`, 'info');
 
                 if (state.mainLoaded) {
                     addEvent('[main] MAIN script loaded', 'info', { source: 'MAIN' });
