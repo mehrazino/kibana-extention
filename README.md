@@ -1,4 +1,4 @@
-# Kibana Note Extention
+# Kibana Bulk Note
 
 <div align="center">
   <img src="elastic-kibana-color.png" width="100" alt="Kibana Bulk Note Logo" />
@@ -21,129 +21,181 @@
 
 ---
 
-A lightweight, cross-browser extension designed to streamline the workflow of security analysts and Kibana users. It eliminates the repetitive task of manually applying notes to multiple alerts by intercepting Kibana's network requests and seamlessly "fanning out" the action across all selected alerts.
+A lightweight, cross-browser extension built for security analysts working with Kibana. It removes the repetitive work of applying the same note to dozens of alerts by intercepting Kibana's own network requests and fanning the action out to every selected alert. It also handles duplicate note cleanup, alert export, and optional self-assignment, all from a small popup.
 
-> **Disclaimer:** This extension is not affiliated with, endorsed by, or supported by Elastic. It relies on Kibana's internal APIs and DOM structure.
+> **Disclaimer:** This extension is not affiliated with, endorsed by, or supported by Elastic. It relies on Kibana's internal APIs and DOM structure, which are undocumented and may change between releases.
 
-## ✨ Overview
+## Overview
 
-When investigating security alerts in Kibana, analysts often need to tag, annotate, or close multiple related alerts with the exact same note. Kibana's native UI requires you to add notes one alert at a time. 
+During triage, analysts often need to tag, annotate, or close several related alerts with the exact same note. Kibana's native UI only lets you add a note to one alert at a time. For a batch of twenty alerts, that is twenty flyouts, twenty text boxes, twenty saves.
 
-**Kibana Bulk Note** solves this by hooking into Kibana's internal APIs. Once you add a note to a single alert within a multi-selected view, the extension automatically replicates that exact note to every other selected alert. It also includes tools for cleaning up duplicate notes and exporting selected alerts as JSON.
+**Kibana Bulk Note** solves this by hooking into Kibana's internal APIs. Once you add a note to a single alert in a multi-selected view, the extension automatically replicates that note to every other selected alert in parallel. The same pattern applies to note deletion and alert assignment.
 
-## 📸 Screenshot
+## Screenshot
 
 <p align="center">
-  <img src="Screenshot 2026-11-11 032442.png" alt="Kibana Bulk Note – Extension popup with activity logs" width="360" />
+  <img src="Screenshot 2026-11-11 032442.png" alt="Kibana Bulk Note popup with activity logs" width="360" />
 </p>
 
-## 🚀 Features
+## Features
 
-- **📝 Bulk Note Fan-out:** Select multiple alerts, open one of them, and add a note. The extension intercepts the save request and mirrors the note to all other selected alerts.
-- **🗑️ Duplicate Note Cleanup:** Delete a specific note from one alert, and the extension will automatically find and delete identical notes across all other selected alerts.
-- **📋 Copy Alerts JSON:** Instantly fetch and copy the full JSON payload of all currently selected alerts to your clipboard.
-- **📊 Activity Logs:** A built-in, real-time logging panel in the popup to monitor exactly what the extension is doing (successes, failures, and API interactions).
-- **🌐 Cross-Browser Support:** Fully compatible with both Chromium-based browsers and Gecko-based browsers.
+- **Bulk Note Fan-out** — Select multiple alerts, open one, add a note. The extension intercepts the save request and mirrors the note to every other selected alert.
+- **Duplicate Note Cleanup** — Delete a specific note from one alert. The extension finds the exact same text on all other selected alerts and deletes it from each.
+- **Auto-assign to Me** — Optional. After a successful note fan-out, assign every alert in the batch to the current user. Existing assignees are preserved; the current user is added alongside them.
+- **Copy Alerts JSON** — Fetch the full JSON payload of every currently selected alert and copy it to the clipboard in one click.
+- **Live Progress HUD** — A small floating overlay at the top of the page shows real-time counts for every running operation: notes copied, notes deleted, alerts assigned. Colors match the popup icons (blue for copy, red for delete, purple for assign).
+- **Activity Logs** — A collapsible log panel inside the popup shows every action the extension takes: API calls, probe results, per-alert outcomes, and errors. Logs show clock time in the popup view and export with full calendar dates when copied to the clipboard.
+- **Cross-Browser** — Works on Chromium-based browsers (Chrome, Edge, Brave) and Gecko-based browsers (Firefox, LibreWolf).
 
-## ⚙️ How It Works
+## How It Works
 
-The extension uses a dual-script architecture to ensure stability and security:
-1. **Isolated Script (`content.js`):** Handles state management, the popup UI communication, logging, and browser storage persistence.
-2. **Main Script (`page-script.js`):** Runs in the page's context and safely patches the `window.fetch` API to intercept Kibana's network requests.
+The extension runs code in two isolated JavaScript worlds. This is deliberate: the page's own JavaScript cannot touch extension internals, and the extension cannot break the page.
+
+1. **Isolated World (`content.js`)** — Owns extension state, storage, and communication with the popup. Cannot see the page's `window.fetch`.
+2. **Main World (`page-script.js` and `hud.js`)** — Runs in the page's own JavaScript context. Can intercept `window.fetch`, read Kibana's network responses, and inject DOM. Cannot access `chrome.*` APIs.
+
+The two worlds communicate only through `window.postMessage`, with explicit source tags (`BulkNote-MAIN` / `BulkNote-ISOLATED`) to prevent message loops.
 
 ### The Fetch Interception Workflow
+
 1. When you add a note, Kibana sends a `PATCH` request to its internal notes API.
-2. The extension intercepts this request, extracts the source alert ID, and the note text.
-3. It then determines the IDs of all other selected alerts. To do this reliably across different Kibana versions, the extension triggers Kibana's native bulk action mechanism. **This is why the selected alerts open when you perform an action:** it forces Kibana to generate the exact list of targeted document IDs in the network payload, which the extension then intercepts.
-4. Finally, it issues concurrent `PATCH` requests for every target alert, seamlessly mirroring the note without triggering unnecessary UI refreshes.
+2. The extension intercepts this request, extracts the source alert ID, and reads the note text.
+3. To determine the IDs of all other selected alerts reliably across Kibana versions, the extension triggers Kibana's own bulk action menu. This forces Kibana to generate the exact list of targeted document IDs in the network payload, which the extension then intercepts and discards before the real request goes out.
+4. Finally, it issues concurrent `PATCH` requests for every target alert, in parallel up to a safe concurrency limit.
 
-## 📦 Installation
+### The Progress HUD
 
-Since this is a self-hosted extension, you need to load it manually into your browser.
+`hud.js` renders an overlay inside an open Shadow DOM, so Kibana's stylesheet cannot leak into it and vice versa. Every running operation gets its own row with an icon, label, count, percentage, and a pulsing animation. Rows transition to a green checkmark on success or a red cross on failure, then auto-dismiss after a few seconds.
 
-### For Chromium-based Browsers (Google Chrome, Microsoft Edge, Brave)
-1. Download or clone this repository to your local machine.
-2. Open your browser and navigate to `chrome://extensions/`.
-3. Enable **Developer mode** (toggle in the top right corner).
-4. Click **Load unpacked** and select the folder containing this project.
+The overlay pauses its own dismiss timer while you hover over it, and clicking any completed row dismisses it immediately. For delete operations, the success row also shows a clickable **refresh** link that reloads the page so Kibana re-fetches the updated alert data.
 
-### For Gecko-based Browsers (Mozilla Firefox, LibreWolf, Tor Browser)
-1. Download or clone this repository to your local machine.
-2. Open Firefox and navigate to `about:debugging#/runtime/this-firefox`.
+## Requirements
+
+- **Chromium-based browsers:** version 105 or newer.
+  - 105 is the first release that supports the `:has()` CSS selector used internally for menu suppression.
+  - Tested on Chrome, Edge, and Brave.
+- **Gecko-based browsers:** version 128 or newer.
+  - 128 is the first release that supports `world: "MAIN"` in Manifest V3 content scripts, which is required for the fetch interception to work.
+  - Tested on Firefox and LibreWolf.
+- **Kibana:** 8.19.5 is the tested baseline. Newer 8.x releases are likely compatible; 9.x is untested.
+
+The extension does not require any additional permissions beyond what the manifest declares, and it does not send any data outside the Kibana server you are already logged into.
+
+## Installation
+
+This extension is self-hosted and must be loaded manually.
+
+### Chromium-based browsers (Chrome, Edge, Brave)
+
+1. Download or clone this repository.
+2. Open `chrome://extensions/` in your browser.
+3. Enable **Developer mode** (top right).
+4. Click **Load unpacked** and select the project folder.
+
+### Gecko-based browsers (Firefox, LibreWolf, Tor)
+
+1. Download or clone this repository.
+2. Open `about:debugging#/runtime/this-firefox`.
 3. Click **Load Temporary Add-on...**.
-4. Select the `manifest.json` file from the project folder.
-*(Note: Temporary add-ons in Firefox are removed when the browser closes. We are currently pursuing the signing of this add-on for Gecko-based browsers to ensure it can be installed permanently.).*
+4. Select `manifest.json` from the project folder.
 
-## 🛠️ Usage
+> Temporary add-ons are removed when Firefox closes. Permanent installation requires signing through Mozilla Add-ons.
 
-### 1. Bulk Note
-1. Open Kibana and navigate to the **Security -> Alerts** page.
-2. Open the extension popup and ensure **Bulk Note** is toggled **ON**
-3. Select multiple alerts using the checkboxes on the left side of the DataGrid.
+## Usage
+
+### Bulk Note
+
+1. Open Kibana → **Security** → **Alerts**.
+2. Open the extension popup and toggle **Bulk Note** on.
+3. Select multiple alerts using the checkboxes on the left of the DataGrid.
 4. Open the flyout for **one** of the selected alerts.
-5. Add your note to the notes section and save it.
-6. Check the **Activity Logs** in the popup to see the note being applied to the other alerts in real-time.
+5. Add your note and save it.
+6. Watch the HUD at the top of the page as the note propagates. Full details appear in **Activity Logs** inside the popup.
 
-### 2. Delete Duplicate Notes
-1. Toggle **Delete Duplicate Notes** to **ON** in the extension popup.
+### Delete Duplicate Notes
+
+1. Toggle **Delete Duplicate Notes** on in the popup.
 2. With multiple alerts selected, open the flyout of the alert containing the note you want to remove.
 3. Click the delete icon next to the note.
-4. The extension will scan the other selected alerts, find notes with the exact same text, and delete them.
+4. The extension finds and deletes the same note on every other selected alert.
+5. Click the **refresh** link in the HUD to reload the page and see the change.
 
-### 3. Copy Alerts JSON
+### Auto-assign to Me
+
+Auto-assign is nested under the Bulk Note card in the popup.
+
+1. Toggle **Bulk Note** on, then toggle **Auto-assign to me** in the panel that appears below it.
+2. Perform a Bulk Note as usual.
+3. After the note has been copied to every target, the extension assigns all of them, plus the source alert, to the current user.
+4. Existing assignees are preserved — the current user is added, not replaced.
+
+The user ID is cached for five minutes to avoid hitting Kibana's `/internal/security/me` endpoint on every operation. If the cache is stale or missing, it is refreshed automatically.
+
+### Copy Alerts JSON
+
 1. Select the alerts you want to export.
-2. Open the extension popup and click **Copy** next to "Copy Alerts JSON".
-3. The JSON data for all selected alerts is now in your clipboard, ready to be pasted into your analysis tools.
+2. Open the popup and click **Copy** next to *Copy Alerts JSON*.
+3. The JSON payload of all selected alerts is now in your clipboard.
 
-## 📂 Project Structure
+## Project Structure
 
 ```text
-kibana-bulk-note-extension-v1/
+kibana-bulk-note-extension/
 │
-├── intel-one-mono-woff2/       # Custom fonts for the UI
-│   ├── IntelOneMono-Bold.woff2
-│   ├── IntelOneMono-BoldItalic.woff2
-│   ├── IntelOneMono-Italic.woff2
-│   ├── IntelOneMono-Light.woff2
-│   ├── IntelOneMono-LightItalic.woff2
+├── intel-one-mono-woff2/              # Intel One Mono webfont files
+│   ├── IntelOneMono-Regular.woff2
 │   ├── IntelOneMono-Medium.woff2
-│   ├── IntelOneMono-MediumItalic.woff2
-│   └── IntelOneMono-Regular.woff2
+│   ├── IntelOneMono-Bold.woff2
+│   └── ... (Light, Italic, BoldItalic variants)
 │
-├── background.js               # Background service worker (handles icon states)
-├── content.js                  # Isolated world script (UI bridge & storage)
-├── page-script.js              # Main world script (fetch interception & API logic)
+├── background.js                      # Service worker — updates toolbar icon state
 │
-├── popup.html                  # Extension popup interface (HTML5)
-├── popup.css                   # Popup UI styles (CSS3)
-├── popup.js                    # Popup logic & activity log rendering (JavaScript)
+├── content.js                         # Isolated world — state, storage, popup bridge
+├── page-script.js                     # Main world — fetch interception, API logic
+├── hud.js                             # Main world — Shadow DOM progress overlay
 │
-├── manifest.json               # Extension configuration (Manifest V3)
-├── elastic-kibana-color.png    # Active extension icon
-├── elastic-kibana-gray.png     # Inactive extension icon
+├── popup.html                         # Popup markup
+├── popup.css                          # Popup styles
+├── popup.js                           # Popup logic, log rendering, toggle wiring
 │
-├── README.md                   # Project documentation and guide
-├── LICENSE                     # Project license (GPL-3.0)
-└── screenshot1.png             # Extension preview image
+├── manifest.json                      # MV3 manifest
+│
+├── elastic-kibana-color.png           # Active extension icon
+├── elastic-kibana-gray.png            # Inactive extension icon
+│
+├── README.md                          # This file
+├── LICENSE                            # GPL-3.0 license text
+└── Screenshot 2026-11-11 032442.png   # Popup preview
 ```
 
-## 🗺️ Roadmap
+## Configuration
 
-- [ ] **Future Kibana Support:** Continuously update the extension to support newer Kibana versions and adapt to API changes.
-- [ ] **API Key Integration:** Investigate the possibility of adding Kibana API Key support for users who prefer explicit authentication over browser sessions.
-- [ ] **UI Bypass:** Eliminate the need to forcefully open selected alerts (flyout) to resolve their IDs, making the workflow completely seamless.
-- [ ] **Success Notifications:** Add visual notifications (toasts) to confirm when a bulk action is successfully completed.
-- [ ] **Store Publishing:** Publish the extension to the Chrome Web Store and Mozilla Add-ons for easier installation.
+The extension targets Kibana 8.19.5 by default. It attempts to auto-detect the Kibana version from the page's DOM on load. If detection fails, it falls back to `8.19.5`. You can also override the version manually:
 
-## 🤝 Contributing & Issues
+1. Open DevTools on any Kibana page.
+2. Run: `chrome.storage.local.set({ bulkNoteKbnVersion: '8.20.0' })`.
+3. Reload the Kibana tab.
 
-We welcome contributions from the community! If you have an idea to improve the extension or want to add a new feature, feel free to fork the repository and submit a pull request. 
+The overridden version is used in the `kbn-version` header of every request the extension sends to Kibana's internal APIs.
 
-If you encounter any bugs, unexpected behavior, or have a question, please **open an issue** on GitHub. Your feedback helps make this tool better for everyone. Let's build and improve it together!
+## Roadmap
 
-👉 **[Open an Issue](https://github.com/mehrazino/kibana-extention/issues)**  
-👉 **[Submit a Pull Request](https://github.com/mehrazino/kibana-extention/pulls)**
+- Currently verified on 8.19.5. Testing on older 8.x and newer 9.x releases is pending.
+- Publish on Chrome Web Store and Mozilla Add-ons for easier installation.
 
-## 📄 License
+## Contributing
 
-This project is licensed under the **GPL-3.0 License**. See the [LICENSE](https://github.com/mehrazino/kibana-extention/blob/master/LICENSE) file for more details.
+Contributions and bug reports are welcome. If you have a feature idea, open an issue first so we can discuss the approach before a large PR.
+
+- [Open an issue](https://github.com/mehrazino/kibana-extention/issues)
+- [Submit a pull request](https://github.com/mehrazino/kibana-extention/pulls)
+
+When reporting a bug, please include:
+
+- Kibana version (visible in the Activity Logs on load, e.g. `[init] State: ENABLED (v8.19.5)`).
+- Browser and version.
+- The relevant lines from **Activity Logs** inside the popup (copy them with the **Copy** button in the log panel).
+
+## License
+
+This project is licensed under the **GPL-3.0 License**. See the [LICENSE](https://github.com/mehrazino/kibana-extention/blob/master/LICENSE) file for the full text.
