@@ -56,19 +56,6 @@ The extension runs code in two isolated JavaScript worlds. This is deliberate: t
 
 The two worlds communicate only through `window.postMessage`, with explicit source tags (`BulkNote-MAIN` / `BulkNote-ISOLATED`) to prevent message loops.
 
-### 🔍 The Fetch Interception Workflow
-
-1. When you add a note, Kibana sends a `PATCH` request to its internal notes API.
-2. The extension intercepts this request, extracts the source alert ID, and reads the note text.
-3. To determine the IDs of all other selected alerts reliably across Kibana versions, the extension triggers Kibana's own bulk action menu. This forces Kibana to generate the exact list of targeted document IDs in the network payload, which the extension then intercepts and discards before the real request goes out.
-4. Finally, it issues concurrent `PATCH` requests for every target alert, in parallel up to a safe concurrency limit.
-
-### 📊 The Progress HUD
-
-`hud.js` renders an overlay inside an open Shadow DOM, so Kibana's stylesheet cannot leak into it and vice versa. Every running operation gets its own row with an icon, label, count, percentage, and a pulsing animation. Rows transition to a green checkmark on success or a red cross on failure, then auto-dismiss after a few seconds.
-
-The overlay pauses its own dismiss timer while you hover over it, and clicking any completed row dismisses it immediately. For delete operations, the success row also shows a clickable **refresh** link that reloads the page so Kibana re-fetches the updated alert data.
-
 ## 📋 Requirements
 
 - **Chromium-based browsers:** version 105 or newer.
@@ -231,6 +218,8 @@ Every action the extension takes is recorded in the log panel. This is the first
 
 ## 🔧 Configuration
 
+### Target Kibana version
+
 The extension targets Kibana 8.19.5 by default. It attempts to auto-detect the Kibana version from the page's DOM on load. If detection fails, it falls back to `8.19.5`. You can also override the version manually:
 
 1. Open DevTools on any Kibana page.
@@ -239,9 +228,42 @@ The extension targets Kibana 8.19.5 by default. It attempts to auto-detect the K
 
 The overridden version is used in the `kbn-version` header of every request the extension sends to Kibana's internal APIs.
 
+### Performance tuning
+
+The numbers that control request pacing, parallel work, and timeout behavior live in a single `CONFIG` object at the top of `page-script.js`. They are plain constants read at script load — there is no UI toggle and they are not stored in `chrome.storage`. To change any of them, edit `page-script.js` directly, then click **Reload** on the extension card in `chrome://extensions/` (or re-run **Load Temporary Add-on** in Firefox).
+
+The values below are the shipped defaults. Each one trades speed against server load or stability, so treat any change as a careful experiment rather than a permanent fix.
+
+| Constant | Default | What it controls |
+|---|---|---|
+| `COPY_CONCURRENCY` | 20 | How many note-copy `PATCH` requests run at the same time. Higher is faster but pushes more load onto Kibana; above ~30 you start seeing 429s on shared clusters. |
+| `DELETE_CONCURRENCY` | 10 | How many delete-verify pairs run in parallel. Kept lower than copy because each delete is followed by a verify `GET`, so this value effectively doubles the request rate. |
+| `ASSIGN_CHUNK_SIZE` | 100 | How many alert IDs go into each `/signals/assignees` request. Kibana's documented ceiling is 100, so this should not be raised. Lowering it increases request count but makes partial failures easier to isolate. |
+| `DELAY_BETWEEN_REQUESTS_MS` | 5 | Sleep inserted after every completed request inside a worker. Small in theory, but on a batch of 200 alerts it adds up to a full second, so treat it as a real pacing knob rather than a rounding error. |
+| `VERIFY_DELAY_MS` | 50 | Pause between a delete and its verify `GET`. Too low and Elasticsearch may still return the note as present; too high and the whole batch slows down proportionally. |
+| `REFRESH_DELAY_MS` | 200 | Wait before clicking the alerts table's refresh button after an operation finishes. Long enough for Kibana to settle, short enough to feel responsive. |
+| `BULK_PROBE_TIMEOUT_MS` | 1500 | How long the extension waits for the bulk actions menu to produce a `signals/status` request before giving up and falling back to the query API. Raise on slow clusters where the probe legitimately takes longer; lower if you want a faster fallback. |
+| `MENU_ACTION_WAIT_MS` | 1000 | How long to wait for the status item to appear inside the open bulk menu. Same trade-off as above. |
+| `MENU_ACTION_POLL_MS` | 15 | Interval between DOM checks while waiting for the menu to render. Lower is snappier but polls more often; higher is gentler on the CPU. |
+| `API_BATCH_SIZE` | 500 | Page size when the extension falls back to querying alert IDs directly. Matches Kibana's default `size` ceiling. |
+| `API_MAX_BATCHES` | 40 | Maximum pages the fallback query will walk. Caps how much data the extension will pull when "Select all" is used on a very large result set — the ceiling works out to 20,000 alerts. |
+| `LOG_PER_ALERT_LIMIT` | 20 | Above this number of targets, the extension stops logging one line per alert and switches to summary lines. Raise it if you want full per-alert visibility in the Activity Logs for larger batches, at the cost of noisier logs. |
+| `USER_ID_TTL_MS` | 300000 (5 min) | How long the resolved user ID is trusted before it is re-fetched. Lower means faster reaction to a user switch; higher means fewer calls to `/internal/security/me`. |
+
+Two constants in `hud.js` also affect perceived performance, though they do not hit the server:
+
+| Constant | Default | What it controls |
+|---|---|---|
+| `UPDATE_THROTTLE_MS` | 80 | Minimum gap between HUD re-renders. Below ~50 the overlay will re-render faster than the eye can follow; above ~150 it starts to feel laggy on large batches. |
+| `HIDE_DELAY_MS` / `HIDE_DELAY_DELETE_MS` | 3000 / 8000 | How long a finished row stays on screen. The longer value is for delete because that row carries the refresh link. |
+
+If you are tuning for a **large batch on a fast cluster**, the two knobs that matter most are `COPY_CONCURRENCY` and `DELETE_CONCURRENCY`. If you are tuning for a **shared or underpowered cluster**, leave the concurrency values alone and raise `DELAY_BETWEEN_REQUESTS_MS` instead — it spreads load more evenly than lowering concurrency while keeping the total time roughly the same.
+
 ## 🗺️ Roadmap
 
 - Currently verified on 8.19.5. Testing on older 8.x and newer 9.x releases is pending.
+- **RTL note support** — Render notes written in right-to-left languages (Arabic, Hebrew, Farsi, Urdu) with correct direction and text alignment across the HUD, the log panel, and the popup, instead of forcing them into an LTR flow.
+- **Inline code comments** — Add documentation comments to every source file, especially around the non-obvious blocks: probe suppression lifecycle, the two-world messaging protocol, HUD pause/resume, and the multi-strategy ID resolution fallback. The goal is for a new contributor to understand intent from the code without having to read every line end to end.
 - Publish on Chrome Web Store and Mozilla Add-ons for easier installation.
 
 ## 🤝 Contributing
