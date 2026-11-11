@@ -34,7 +34,7 @@ When investigating security alerts in Kibana, analysts often need to tag, annota
 ## 📸 Screenshot
 
 <p align="center">
-  <img src="screenshot1.png" alt="Kibana Bulk Note – Extension popup with activity logs" width="360" />
+  <img src="Screenshot 2026-11-11 032442.png" alt="Kibana Bulk Note – Extension popup with activity logs" width="360" />
 </p>
 
 ## 🚀 Features
